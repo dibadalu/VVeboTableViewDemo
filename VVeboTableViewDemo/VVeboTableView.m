@@ -36,114 +36,7 @@
     return self;
 }
 
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section{
-    return datas.count;
-}
-
-- (NSInteger)numberOfSections{
-    return 1;
-}
-
-- (void)drawCell:(VVeboTableViewCell *)cell withIndexPath:(NSIndexPath *)indexPath{
-    NSDictionary *data = [datas objectAtIndex:indexPath.row];
-    cell.selectionStyle = UITableViewCellSelectionStyleNone;
-    [cell clear];
-    cell.data = data;
-    if (needLoadArr.count>0&&[needLoadArr indexOfObject:indexPath]==NSNotFound) {
-        [cell clear];
-        return;
-    }
-    if (scrollToToping) {
-        return;
-    }
-    [cell draw];
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath{
-    VVeboTableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"cell"];
-    if (cell==nil) {
-        cell = [[VVeboTableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
-                                         reuseIdentifier:@"cell"];
-    }
-    [self drawCell:cell withIndexPath:indexPath];
-    return cell;
-}
-
-- (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath{
-    NSDictionary *dict = datas[indexPath.row];
-    float height = [dict[@"frame"] CGRectValue].size.height;
-    return height;
-}
-
-- (void)scrollViewWillBeginDragging:(UIScrollView *)scrollView{
-    [needLoadArr removeAllObjects];
-}
-
-//按需加载 - 如果目标行与当前行相差超过指定行数，只在目标滚动范围的前后指定3行加载。
-- (void)scrollViewWillEndDragging:(UIScrollView *)scrollView withVelocity:(CGPoint)velocity targetContentOffset:(inout CGPoint *)targetContentOffset{
-    NSIndexPath *ip = [self indexPathForRowAtPoint:CGPointMake(0, targetContentOffset->y)];
-    NSIndexPath *cip = [[self indexPathsForVisibleRows] firstObject];
-    NSInteger skipCount = 8;
-    if (labs(cip.row-ip.row)>skipCount) {
-        NSArray *temp = [self indexPathsForRowsInRect:CGRectMake(0, targetContentOffset->y, self.width, self.height)];
-        NSMutableArray *arr = [NSMutableArray arrayWithArray:temp];
-        if (velocity.y<0) {
-            NSIndexPath *indexPath = [temp lastObject];
-            if (indexPath.row+3<datas.count) {
-                [arr addObject:[NSIndexPath indexPathForRow:indexPath.row+1 inSection:0]];
-                [arr addObject:[NSIndexPath indexPathForRow:indexPath.row+2 inSection:0]];
-                [arr addObject:[NSIndexPath indexPathForRow:indexPath.row+3 inSection:0]];
-            }
-        } else {
-            NSIndexPath *indexPath = [temp firstObject];
-            if (indexPath.row>3) {
-                [arr addObject:[NSIndexPath indexPathForRow:indexPath.row-3 inSection:0]];
-                [arr addObject:[NSIndexPath indexPathForRow:indexPath.row-2 inSection:0]];
-                [arr addObject:[NSIndexPath indexPathForRow:indexPath.row-1 inSection:0]];
-            }
-        }
-        [needLoadArr addObjectsFromArray:arr];
-    }
-}
-
-- (BOOL)scrollViewShouldScrollToTop:(UIScrollView *)scrollView{
-    scrollToToping = YES;
-    return YES;
-}
-
-- (void)scrollViewDidEndScrollingAnimation:(UIScrollView *)scrollView{
-    scrollToToping = NO;
-    [self loadContent];
-}
-
-- (void)scrollViewDidScrollToTop:(UIScrollView *)scrollView{
-    scrollToToping = NO;
-    [self loadContent];
-}
-
-//用户触摸时第一时间加载内容
-- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event{
-    if (!scrollToToping) {
-        [needLoadArr removeAllObjects];
-        [self loadContent];
-    }
-    return [super hitTest:point withEvent:event];
-}
-
-- (void)loadContent{
-    if (scrollToToping) {
-        return;
-    }
-    if (self.indexPathsForVisibleRows.count<=0) {
-        return;
-    }
-    if (self.visibleCells&&self.visibleCells.count>0) {
-        for (id temp in [self.visibleCells copy]) {
-            VVeboTableViewCell *cell = (VVeboTableViewCell *)temp;
-            [cell draw];
-        }
-    }
-}
+#pragma mark - Initialize data
 
 //读取信息
 - (void)loadData{
@@ -268,6 +161,125 @@
         data[@"pic_urls"] = pic_urls;
     }
 }
+
+#pragma mark - tableView dataSource & delegate
+
+- (NSInteger)numberOfSections{
+    return 1;
+}
+
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section{
+    return datas.count;
+}
+
+// 只填充cell
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath{
+    VVeboTableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"cell"];
+    if (cell==nil) {
+        cell = [[VVeboTableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
+                                         reuseIdentifier:@"cell"];
+    }
+    [self drawCell:cell withIndexPath:indexPath];
+    return cell;
+}
+
+- (void)drawCell:(VVeboTableViewCell *)cell withIndexPath:(NSIndexPath *)indexPath{
+    NSDictionary *data = [datas objectAtIndex:indexPath.row];
+    cell.selectionStyle = UITableViewCellSelectionStyleNone;
+    [cell clear];
+    cell.data = data;
+    if (needLoadArr.count>0&&[needLoadArr indexOfObject:indexPath]==NSNotFound) {
+        [cell clear];
+        return;
+    }
+    if (scrollToToping) {
+        return;
+    }
+    [cell draw];
+}
+
+// 负责计算高度, 将高度等布局缓存到数据源中.
+- (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath{
+    NSDictionary *dict = datas[indexPath.row];
+    float height = [dict[@"frame"] CGRectValue].size.height;
+    return height;
+}
+
+#pragma mark - scrollView delegate
+
+- (void)scrollViewWillBeginDragging:(UIScrollView *)scrollView{
+    [needLoadArr removeAllObjects];
+}
+
+//按需加载 - 如果目标行与当前行相差超过指定行数，只在目标滚动范围的前后指定3行加载。
+- (void)scrollViewWillEndDragging:(UIScrollView *)scrollView withVelocity:(CGPoint)velocity targetContentOffset:(inout CGPoint *)targetContentOffset{
+    NSIndexPath *ip = [self indexPathForRowAtPoint:CGPointMake(0, targetContentOffset->y)];//当前行
+    NSIndexPath *cip = [[self indexPathsForVisibleRows] firstObject];//目标行
+    NSInteger skipCount = 8;
+    if (labs(cip.row-ip.row)>skipCount) {
+        NSArray *temp = [self indexPathsForRowsInRect:CGRectMake(0, targetContentOffset->y, self.width, self.height)];
+        NSMutableArray *arr = [NSMutableArray arrayWithArray:temp];
+        if (velocity.y<0) {
+            NSIndexPath *indexPath = [temp lastObject];
+            if (indexPath.row+3<datas.count) {
+                [arr addObject:[NSIndexPath indexPathForRow:indexPath.row+1 inSection:0]];
+                [arr addObject:[NSIndexPath indexPathForRow:indexPath.row+2 inSection:0]];
+                [arr addObject:[NSIndexPath indexPathForRow:indexPath.row+3 inSection:0]];
+            }
+        } else {
+            NSIndexPath *indexPath = [temp firstObject];
+            if (indexPath.row>3) {
+                [arr addObject:[NSIndexPath indexPathForRow:indexPath.row-3 inSection:0]];
+                [arr addObject:[NSIndexPath indexPathForRow:indexPath.row-2 inSection:0]];
+                [arr addObject:[NSIndexPath indexPathForRow:indexPath.row-1 inSection:0]];
+            }
+        }
+        [needLoadArr addObjectsFromArray:arr];
+    }
+}
+
+- (BOOL)scrollViewShouldScrollToTop:(UIScrollView *)scrollView{
+    scrollToToping = YES;
+    return YES;
+}
+
+- (void)scrollViewDidEndScrollingAnimation:(UIScrollView *)scrollView{
+    scrollToToping = NO;
+    [self loadContent];
+}
+
+- (void)scrollViewDidScrollToTop:(UIScrollView *)scrollView{
+    scrollToToping = NO;
+    [self loadContent];
+}
+
+#pragma mark - Events Handler
+
+//用户触摸时第一时间加载内容
+- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event{
+    if (!scrollToToping) {
+        [needLoadArr removeAllObjects];
+        [self loadContent];
+    }
+    return [super hitTest:point withEvent:event];
+}
+
+- (void)loadContent{
+    if (scrollToToping) {
+        return;
+    }
+    if (self.indexPathsForVisibleRows.count<=0) {
+        return;
+    }
+    if (self.visibleCells&&self.visibleCells.count>0) {
+        for (id temp in [self.visibleCells copy]) {
+            VVeboTableViewCell *cell = (VVeboTableViewCell *)temp;
+            [cell draw];
+        }
+    }
+}
+
+#pragma mark - super
 
 - (void)removeFromSuperview{
     for (UIView *temp in self.subviews) {
